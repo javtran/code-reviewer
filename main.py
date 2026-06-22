@@ -4,7 +4,10 @@ import json
 import os
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -12,7 +15,7 @@ app = FastAPI()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN", "")
 
-#
+# Recomputes HMAC-SHA256 hash of the payload using webhook secret to compare to x_hub_signature_256
 def verify_signature(payload: bytes, sig_header: str) -> bool:
     expected = "sha256=" + hmac.new(
         WEBHOOK_SECRET.encode(), payload, hashlib.sha256
@@ -55,7 +58,7 @@ async def handle_webhook(
 
     return {"status": "ok", "pr": pr_num, "files": len(files)}
 
-
+# Get all PR files using GitHub API
 async def fetch_pr_files(owner: str, repo: str, pr_num: int) -> list:
     url     = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/files"
     headers = {
