@@ -6,6 +6,7 @@ import os
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
+from mangum import Mangum
 
 load_dotenv()
 
@@ -70,3 +71,5 @@ async def fetch_pr_files(owner: str, repo: str, pr_num: int) -> list:
         resp = await client.get(url, headers=headers)
         resp.raise_for_status()
         return resp.json()
+
+handler = Mangum(app)

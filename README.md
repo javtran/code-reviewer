@@ -19,7 +19,7 @@ GitHub PR → Webhook → AWS Lambda (Docker) → Anthropic API → PR Comments
 | Layer | Description | Status |
 |-------|-------------|--------|
 | 1 | GitHub webhook receiver + signature verification | ✅ |
-| 2 | Docker + AWS Lambda deployment | 🔲 |
+| 2 | Docker + AWS Lambda deployment | ✅ |
 | 3 | LLM prompt + structured review output | 🔲 |
 | 4 | PostgreSQL schema (repos, reviews, comments) | 🔲 |
 | 5 | React dashboard (PR history + prompt editor) | 🔲 |
@@ -37,7 +37,7 @@ GitHub PR → Webhook → AWS Lambda (Docker) → Anthropic API → PR Comments
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install fastapi uvicorn python-dotenv httpx
+pip install fastapi uvicorn python-dotenv httpx mangum
 ```
 
 Copy `.env.example` to `.env` and fill in your values:
@@ -73,6 +73,45 @@ ngrok http 8000
 
 Open a PR on the repo — your terminal will print the PR number, title, and unified diff for each changed file.
 
+## Deployment
+
+### Prerequisites
+- [AWS CLI](https://aws.amazon.com/cli/) configured with `aws configure`
+- Docker Desktop running
+- ECR repository created:
+  ```bash
+  aws ecr create-repository --repository-name code-reviewer --region us-west-2
+  ```
+
+### Build and Push to ECR
+
+```bash
+# Authenticate Docker with ECR
+aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 282353614042.dkr.ecr.us-west-2.amazonaws.com
+
+# Build and push
+docker buildx build --platform linux/amd64 --provenance=false -t code-reviewer .
+docker tag code-reviewer:latest 282353614042.dkr.ecr.us-west-2.amazonaws.com/code-reviewer:latest
+docker push 282353614042.dkr.ecr.us-west-2.amazonaws.com/code-reviewer:latest
+```
+
+### Update Lambda
+
+After pushing a new image:
+
+```bash
+aws lambda update-function-code \
+  --function-name code-reviewer \
+  --image-uri 282353614042.dkr.ecr.us-west-2.amazonaws.com/code-reviewer:latest \
+  --region us-west-2
+```
+
+### Lambda Function URL
+
+```
+https://epjmjb6wmn3fgdcnz3pphaki7e0jqyoo.lambda-url.us-west-2.on.aws/webhook
+```
+
 ## Environment Variables
 
 | Variable | Description |
@@ -80,7 +119,7 @@ Open a PR on the repo — your terminal will print the PR number, title, and uni
 | `WEBHOOK_SECRET` | Secret used to verify GitHub webhook signatures |
 | `GITHUB_TOKEN` | GitHub PAT for fetching PR diffs and posting comments |
 
-In production (Lambda), these are stored in **AWS Secrets Manager** — never hardcoded or committed.
+In production (Lambda), these are set as Lambda environment variables via `aws lambda update-function-configuration`. Never hardcoded or committed.
 
 ## Security
 
